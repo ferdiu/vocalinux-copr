@@ -173,7 +173,18 @@ jobs:
         if: env.START_BUILD == 'true'
         run: |
           set -euo pipefail
-          echo "Downloading source..."
+          # spectool downloads via python-requests, which tries IPv6 first and
+          # dies with "Network is unreachable" inside GH Actions containers
+          # (no IPv6 route). curl falls back to IPv4, so pre-download with it;
+          # spectool then sees the file present and skips downloading.
+          VERSION="${{ env.PYNPUT_BUILD_VERSION }}"
+          TARBALL="pynput-${VERSION}.tar.gz"
+          echo "Downloading source with curl..."
+          curl -fL --retry 3 \
+            -o "$GITHUB_WORKSPACE/sources/${TARBALL}" \
+            "https://files.pythonhosted.org/packages/source/p/pynput/${TARBALL}"
+
+          echo "Verifying source with spectool..."
           spectool -g -C "$GITHUB_WORKSPACE/sources/" "$GITHUB_WORKSPACE/${{ env.PYNPUT_SPEC }}"
 
           echo "Building sRPM..."
@@ -284,6 +295,14 @@ jobs:
           cp "$GITHUB_WORKSPACE"/patches/*.patch "$GITHUB_WORKSPACE/sources/" 2>/dev/null || true
 
           echo "Downloading upstream source tarball..."
+          # Same IPv6 workaround as the pynput job: pre-download with curl so
+          # spectool (python-requests, IPv6-first) has nothing to download.
+          TAG="${{ env.VOCALINUX_BUILD_TAG }}"
+          V="${{ env.VOCALINUX_BUILD_VERSION }}"
+          TARBALL="vocalinux-${V}.tar.gz"
+          curl -fL --retry 3 \
+            -o "$GITHUB_WORKSPACE/sources/${TARBALL}" \
+            "https://github.com/VocaHQ/vocalinux/archive/refs/tags/${TAG}.tar.gz"
           spectool -g -C "$GITHUB_WORKSPACE/sources/" "$GITHUB_WORKSPACE/${{ env.VOCALINUX_SPEC }}"
 
           echo "Building sRPM..."
