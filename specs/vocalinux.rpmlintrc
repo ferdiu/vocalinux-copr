@@ -1,0 +1,22 @@
+# vocalinux rpmlint filters
+#
+# whisper.cpp / pywhispercpp / semanage are project/tool names the spelling
+# checker cannot know.
+addFilter(r"spelling-error")
+# vocalinux-engine is an intentional unversioned virtual provide for engine
+# variant selection (see the header note in the spec).
+addFilter(r"unversioned-explicit-provides vocalinux-engine")
+# No man pages upstream; tracked as future work.
+addFilter(r"no-manual-page-for-binary")
+# The AyatanaAppIndicator3 typelib ships inside libayatana-appindicator-gtk3
+# and Fedora does not emit typelib() provides for it, so an explicit Requires
+# on the library package is the only correct way to depend on it.
+addFilter(r"explicit-lib-dependency libayatana-appindicator-gtk3")
+# The rm commands come from the standard %selinux_modules_install /
+# %selinux_modules_uninstall macro expansions, not from hand-written code.
+addFilter(r"dangerous-command-in-%post")
+# Subpackages intentionally ship no documentation (virtual engine provide,
+# SELinux module).
+addFilter(r"no-documentation")
+# vocalinux and vocalinux-gui are upstream-defined identical entry points.
+addFilter(r"files-duplicate /usr/bin/vocalinux-gui")
