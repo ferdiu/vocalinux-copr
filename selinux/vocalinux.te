@@ -1,0 +1,45 @@
+policy_module(vocalinux, 1.0.0)
+
+########################################
+#
+# Declarations
+#
+
+type vocalinux_t;
+type vocalinux_exec_t;
+application_domain(vocalinux_t, vocalinux_exec_t)
+
+type vocalinux_home_t;
+userdom_user_home_content(vocalinux_home_t)
+
+# tmpfs (SYSV shm) type required by the X client template
+type vocalinux_tmpfs_t;
+userdom_user_tmp_file(vocalinux_tmpfs_t)
+
+########################################
+#
+# vocalinux local policy
+#
+# NOTE: this module is shipped PERMISSIVE by default (see the -selinux
+# subpackage %post). Rules here are the minimal plausible set; refine from
+# real AVC denials (audit2allow) before switching to enforcing.
+#
+
+# Audio capture/playback (PulseAudio/PipeWire client)
+pulseaudio_stream_connect(vocalinux_t)
+pulseaudio_dbus_chat(vocalinux_t)
+
+# X11 client access (Wayland socket/runtime-dir access is covered by the
+# user domain transition and will be refined from AVC logs)
+xserver_user_x_domain_template(vocalinux, vocalinux_t, vocalinux_tmpfs_t)
+
+# D-Bus session bus (AppIndicator / StatusNotifier tray)
+dbus_session_bus_client(vocalinux_t)
+
+# Home config/model dirs (~/.config/vocalinux, ~/.local/share/vocalinux)
+allow vocalinux_t vocalinux_home_t:dir manage_dir_perms;
+allow vocalinux_t vocalinux_home_t:file manage_file_perms;
+
+# Localization, fonts, certs
+miscfiles_read_localization(vocalinux_t)
+miscfiles_read_generic_certs(vocalinux_t)

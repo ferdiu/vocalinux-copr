@@ -1,0 +1,4 @@
+/usr/bin/vocalinux					--	gen_context(system_u:object_r:vocalinux_exec_t,s0)
+/usr/bin/vocalinux-gui					--	gen_context(system_u:object_r:vocalinux_exec_t,s0)
+/home/[^/]+/\.config/vocalinux(/.*)?			gen_context(system_u:object_r:vocalinux_home_t,s0)
+/home/[^/]+/\.local/share/vocalinux(/.*)?		gen_context(system_u:object_r:vocalinux_home_t,s0)

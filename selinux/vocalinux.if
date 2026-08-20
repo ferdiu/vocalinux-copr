@@ -1,0 +1,18 @@
+## <summary>VocaLinux voice dictation SELinux policy interfaces</summary>
+
+########################################
+## <summary>
+##	Execute vocalinux in the vocalinux domain.
+## </summary>
+## <param name="domain">
+##	Domain allowed to transition.
+## </param>
+#
+interface(`vocalinux_domtrans',`
+	gen_require(`
+		type vocalinux_t, vocalinux_exec_t;
+	')
+
+	corecmd_search_bin($1)
+	domtrans_pattern($1, vocalinux_exec_t, vocalinux_t)
+')
