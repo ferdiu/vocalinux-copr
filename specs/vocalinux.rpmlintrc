@@ -19,4 +19,4 @@ addFilter(r"dangerous-command-in-%post")
 # SELinux module).
 addFilter(r"no-documentation")
 # vocalinux and vocalinux-gui are upstream-defined identical entry points.
-addFilter(r"files-duplicate /usr/bin/vocalinux-gui")
+addFilter(r"files-duplicate.*vocalinux-gui")

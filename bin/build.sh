@@ -17,6 +17,10 @@
 
 set -euo pipefail
 
+# Allow running as root (e.g. inside a container) without sudo.
+SUDO="sudo"
+[ "$(id -u)" -eq 0 ] && SUDO=""
+
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUILD="$ROOT/.build"
 SOURCES="$BUILD/SOURCES"
@@ -46,8 +50,21 @@ rpm -q selinux-policy-devel >/dev/null 2>&1 || NEED_PKGS+=(selinux-policy-devel)
 rpm -q systemd >/dev/null 2>&1 || NEED_PKGS+=(systemd)   # provides pkgconfig(systemd) for %selinux_requires
 if [ ${#NEED_PKGS[@]} -gt 0 ]; then
     echo "==> Installing missing build tools: ${NEED_PKGS[*]}"
-    sudo dnf install -y "${NEED_PKGS[@]}"
+    $SUDO dnf install -y "${NEED_PKGS[@]}"
 fi
+
+# BuildRequires of our packages that rpmbuild --rebuild resolves from the
+# host (mock/COPR would resolve these automatically in a clean chroot).
+# Idempotent: dnf skips already-installed packages.
+echo "==> Ensuring package BuildRequires are installed"
+$SUDO dnf install -y -q \
+    python3-setuptools python3-wheel \
+    python3-evdev python3-xlib python3-six \
+    xorg-x11-server-Xvfb xorg-x11-drv-dummy \
+    python3-lxml python3-numpy python3-psutil python3-pyaudio \
+    python3-gobject python3-pywhispercpp python3-tqdm python3-requests \
+    desktop-file-utils libappstream-glib \
+    python3-pytest python3-pytest-mock python3-pytest-timeout
 
 mkdir -p "$BUILD"/{SOURCES,SPECS,BUILD,RPMS,SRPMS}
 
@@ -69,7 +86,7 @@ if want pynput; then
     # shellcheck disable=SC2086
     rpmbuild "${RPMBUILD_DEFS[@]}" $NO_CHECK --rebuild "$BUILD"/SRPMS/python-pynput-*.src.rpm
     echo "==> Installing python3-pynput (needed as vocalinux BuildRequires)"
-    sudo dnf install -y --allowerasing "$BUILD"/RPMS/noarch/python3-pynput-*.rpm
+    $SUDO dnf install -y --allowerasing "$BUILD"/RPMS/noarch/python3-pynput-*.rpm
 fi
 
 # ------------------------------------------------------------- vocalinux ---
@@ -87,7 +104,7 @@ fi
 
 # ---------------------------------------------------------------- rpmlint ---
 echo "==> rpmlint (filters: specs/vocalinux.rpmlintrc)"
-rpmlint -r "$ROOT/specs/vocalinux.rpmlintrc" \
+rpmlint --ignore-unused-rpmlintrc -r "$ROOT/specs/vocalinux.rpmlintrc" \
     "$BUILD"/SPECS/*.spec \
     "$BUILD"/RPMS/noarch/*.rpm \
     "$BUILD"/SRPMS/*.src.rpm || true
