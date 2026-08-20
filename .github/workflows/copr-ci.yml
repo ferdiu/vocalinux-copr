@@ -173,6 +173,8 @@ jobs:
         if: env.START_BUILD == 'true'
         run: |
           set -euo pipefail
+          # sources/ is empty in git and thus absent after checkout
+          mkdir -p "$GITHUB_WORKSPACE/sources"
           # spectool downloads via python-requests, which tries IPv6 first and
           # dies with "Network is unreachable" inside GH Actions containers
           # (no IPv6 route). curl falls back to IPv4, so pre-download with it;
@@ -287,6 +289,8 @@ jobs:
         run: |
           set -euo pipefail
           echo "Staging local sources (SELinux policy + rpmlintrc + patches)..."
+          # sources/ is empty in git and thus absent after checkout
+          mkdir -p "$GITHUB_WORKSPACE/sources"
           cp "$GITHUB_WORKSPACE"/selinux/vocalinux.te \
              "$GITHUB_WORKSPACE"/selinux/vocalinux.fc \
              "$GITHUB_WORKSPACE"/selinux/vocalinux.if \
