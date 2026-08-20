@@ -150,9 +150,14 @@ appstream-util validate-relax --nonet %{buildroot}%{_datadir}/metainfo/com.vocal
 #  - test_ibus_engine_core: needs a running IBus daemon (no ibus in mock)
 #  - test_enable_autostart_permission_error: asserts chmod-based permission
 #    failures, which do not apply when the build runs as root
+#  - TestWhispercppGpuDeviceSelection: mocks pywhispercpp but the code probes
+#    the real pywhispercpp for context_params support; pywhispercpp is not
+#    installed in the buildroot, so the fallback path is taken and the
+#    assertions on GPU device selection fail
 %pytest -m "not slow and not integration and not audio" \
     -k "not test_ibus_engine_core" \
-    --deselect tests/test_autostart_manager_ext.py::TestAutostartManagerExtra::test_enable_autostart_permission_error
+    --deselect tests/test_autostart_manager_ext.py::TestAutostartManagerExtra::test_enable_autostart_permission_error \
+    --deselect tests/test_recognition_manager_device_config.py::TestWhispercppGpuDeviceSelection
 
 %files -f %{pyproject_files}
 %doc README.md
