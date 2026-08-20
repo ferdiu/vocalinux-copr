@@ -1,0 +1,20 @@
+# Local RPM build tree (created by bin/build.sh)
+.build/
+
+# Downloaded upstream sources staged for rpmbuild
+sources/*.tar.gz
+sources/*.tgz
+sources/*.tar.bz2
+
+# RPM artifacts (in case of an in-tree rpmbuild)
+*.rpm
+*.src.rpm
+
+# Python
+__pycache__/
+*.pyc
+
+# Editor/OS noise
+*.swp
+*~
+.DS_Store
