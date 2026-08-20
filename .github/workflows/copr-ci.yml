@@ -275,12 +275,13 @@ jobs:
         if: env.START_BUILD == 'true'
         run: |
           set -euo pipefail
-          echo "Staging local sources (SELinux policy + rpmlintrc)..."
+          echo "Staging local sources (SELinux policy + rpmlintrc + patches)..."
           cp "$GITHUB_WORKSPACE"/selinux/vocalinux.te \
              "$GITHUB_WORKSPACE"/selinux/vocalinux.fc \
              "$GITHUB_WORKSPACE"/selinux/vocalinux.if \
              "$GITHUB_WORKSPACE"/specs/vocalinux.rpmlintrc \
              "$GITHUB_WORKSPACE/sources/"
+          cp "$GITHUB_WORKSPACE"/patches/*.patch "$GITHUB_WORKSPACE/sources/" 2>/dev/null || true
 
           echo "Downloading upstream source tarball..."
           spectool -g -C "$GITHUB_WORKSPACE/sources/" "$GITHUB_WORKSPACE/${{ env.VOCALINUX_SPEC }}"

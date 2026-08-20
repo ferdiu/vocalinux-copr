@@ -91,11 +91,26 @@ fi
 
 # ------------------------------------------------------------- vocalinux ---
 if want vocalinux; then
+    # vocalinux's dynamic BuildRequires include python3dist(pynput), which is
+    # not in Fedora: install a previously built local RPM if present.
+    if ! rpm -q python3-pynput >/dev/null 2>&1; then
+        PYNPUT_RPM=$(ls -t "$BUILD"/RPMS/noarch/python3-pynput-*.rpm 2>/dev/null | head -1 || true)
+        if [ -n "$PYNPUT_RPM" ]; then
+            echo "==> Installing previously built python3-pynput ($PYNPUT_RPM)"
+            $SUDO dnf install -y --allowerasing "$PYNPUT_RPM"
+        else
+            echo "ERROR: python3-pynput is not installed and no local build exists." >&2
+            echo "Run 'bin/build.sh pynput' (or a full 'bin/build.sh') first." >&2
+            exit 1
+        fi
+    fi
+
     echo "==> Building vocalinux (+ engine-whispercpp, + selinux)"
     cp "$ROOT/specs/vocalinux.spec" "$BUILD/SPECS/"
     # Local sources referenced by the spec (Source1..Source4)
     cp "$ROOT"/selinux/vocalinux.{te,fc,if} "$SOURCES/"
     cp "$ROOT/specs/vocalinux.rpmlintrc" "$SOURCES/"
+    cp "$ROOT"/patches/*.patch "$SOURCES/" 2>/dev/null || true
     spectool -g -C "$SOURCES" "$BUILD/SPECS/vocalinux.spec"
     rpmbuild "${RPMBUILD_DEFS[@]}" -bs "$BUILD/SPECS/vocalinux.spec"
     # shellcheck disable=SC2086

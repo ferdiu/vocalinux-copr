@@ -34,6 +34,15 @@
   unpackaged. Dropped deliberately.
 - **pywhispercpp >= 1.2** in the engine subpackage matches v0.15.0 upstream
   metadata (main bumped to >=1.5.0; Fedora 43 ships 1.4.0, Rawhide 1.5.0).
+- **`Patch0: whispercpp-context-params-guard.patch`** (backport from upstream
+  main): v0.15.0 passes `context_params` to `pywhispercpp.Model` whenever a
+  Vulkan/CUDA GPU is detected, but Fedora's pywhispercpp 1.4.0 has no such
+  `Model.__init__` parameter — it raises AttributeError (uncaught: the
+  v0.15.0 fallback only catches TypeError) and the half-constructed Model
+  then segfaults on GC. With this patch on 1.4.0, GPU device selection is
+  skipped with a warning and dictation works on the default device; on
+  pywhispercpp >= 1.5 the guard auto-enables selection. Drop the patch when
+  packaging a release that includes the upstream fix.
 - **%check deselections**: `test_ibus_engine_core` (needs a running IBus
   daemon) and
   `test_autostart_manager_ext.py::...::test_enable_autostart_permission_error`

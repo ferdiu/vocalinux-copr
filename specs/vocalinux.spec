@@ -31,6 +31,15 @@ Source2:        vocalinux.fc
 Source3:        vocalinux.if
 Source4:        vocalinux.rpmlintrc
 
+# Backport from upstream main: v0.15.0 passes context_params (GPU device
+# selection) to pywhispercpp unconditionally when Vulkan/CUDA is detected.
+# Fedora's pywhispercpp 1.4.0 has no context_params in Model.__init__, which
+# raises AttributeError (the v0.15.0 fallback only catches TypeError) and the
+# partially constructed Model then segfaults on GC. The patch guards the
+# kwarg behind a signature inspection and catches AttributeError too.
+# DROP THIS PATCH when packaging a release that includes the upstream fix.
+Patch0:         whispercpp-context-params-guard.patch
+
 BuildArch:      noarch
 BuildRequires:  python3-devel
 BuildRequires:  pyproject-rpm-macros
