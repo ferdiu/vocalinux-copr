@@ -1,0 +1,296 @@
+# .github/workflows/copr-ci.yml
+#
+# Monitors upstream projects for new releases and triggers COPR builds when
+# upstream is ahead of the last built version in the ferdiu/vocalinux COPR
+# project. Adapted from ferdiu/opencode-sandbox-copr.
+#
+# Upstreams tracked:
+#   vocalinux     — https://github.com/VocaHQ/vocalinux (git tags)
+#   python-pynput — https://pypi.org/project/pynput/    (PyPI; not in Fedora)
+#
+# Required GitHub repository secrets (Settings → Secrets → Actions):
+#   COPR_BUILD_L  — copr-cli login    (from https://copr.fedorainfracloud.org/api)
+#   COPR_BUILD_T  — copr-cli token    (from https://copr.fedorainfracloud.org/api)
+#
+# The copr-cli config section name must be "copr-cli" (default).
+# Download your token config from https://copr.fedorainfracloud.org/api and
+# split the login and token values into the two secrets above.
+
+name: COPR CI build
+
+on:
+  schedule:
+    - cron: "0 2 * * *"   # 02:00 UTC daily — after most upstream release windows
+  workflow_dispatch:        # allow manual trigger from the Actions tab
+    inputs:
+      force_rebuild:
+        description: "Force rebuild of all packages (skip version check)"
+        type: boolean
+        default: false
+
+env:
+  COPR_USERNAME:    ferdiu
+  COPR_PROJECT:     vocalinux
+  COPR_URL:         https://copr.fedorainfracloud.org
+  GIT_USER_NAME:    ferdiu
+  GIT_USER_EMAIL:   ferdiu@users.noreply.github.com
+
+  # Upstreams for version polling
+  VOCALINUX_REPO:   https://github.com/VocaHQ/vocalinux
+  PYNPUT_PYPI:      https://pypi.org/pypi/pynput/json
+
+  # Spec files (relative to GITHUB_WORKSPACE)
+  VOCALINUX_SPEC:   specs/vocalinux.spec
+  PYNPUT_SPEC:      specs/python-pynput.spec
+
+##############################################################################
+# Job 1: Poll upstreams and expose their latest versions
+##############################################################################
+jobs:
+  GetLatestVersions:
+    runs-on: ubuntu-latest
+    outputs:
+      VOCALINUX_TAG:     ${{ steps.versions.outputs.VOCALINUX_TAG }}
+      VOCALINUX_VERSION: ${{ steps.versions.outputs.VOCALINUX_VERSION }}
+      PYNPUT_VERSION:    ${{ steps.versions.outputs.PYNPUT_VERSION }}
+
+    steps:
+      - name: Resolve latest upstream versions
+        id: versions
+        run: |
+          set -euo pipefail
+
+          # Latest vocalinux tag; upstream may use phase suffixes (v0.14.1-beta)
+          TAG=$(git ls-remote --tags --refs "${{ env.VOCALINUX_REPO }}" \
+            | awk '{print $2}' \
+            | sed 's#refs/tags/##' \
+            | grep -E '^v?[0-9]+\.[0-9]+\.[0-9]+' \
+            | sort -V \
+            | tail -n 1)
+          [ -n "$TAG" ] || { echo "ERROR: could not resolve vocalinux tag"; exit 1; }
+
+          # RPM Version cannot contain '-': v0.14.1-beta -> 0.14.1~beta
+          VERSION=$(echo "${TAG#v}" | sed 's/-/~/')
+
+          PYNPUT=$(curl -fsSL "${{ env.PYNPUT_PYPI }}" \
+            | python3 -c 'import json,sys; print(json.load(sys.stdin)["info"]["version"])')
+          [ -n "$PYNPUT" ] || { echo "ERROR: could not resolve pynput version"; exit 1; }
+
+          echo "vocalinux latest: $TAG  (rpm version: $VERSION)"
+          echo "pynput    latest: $PYNPUT"
+
+          echo "VOCALINUX_TAG=$TAG"          >> "$GITHUB_OUTPUT"
+          echo "VOCALINUX_VERSION=$VERSION"  >> "$GITHUB_OUTPUT"
+          echo "PYNPUT_VERSION=$PYNPUT"      >> "$GITHUB_OUTPUT"
+
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ github.repository }}
+
+      - name: Update tracked versions in README
+        run: |
+          set -euo pipefail
+          V="${{ steps.versions.outputs.VOCALINUX_VERSION }}"
+          P="${{ steps.versions.outputs.PYNPUT_VERSION }}"
+          sed -i -E "s#(badge/vocalinux-)[^-]+(-blue)#\1${V}\2#" README.md
+          sed -i -E "s#(badge/pynput-)[^-]+(-blue)#\1${P}\2#" README.md
+          git config --global user.name  "${{ env.GIT_USER_NAME }}"
+          git config --global user.email "${{ env.GIT_USER_EMAIL }}"
+          git add README.md
+          git commit --allow-empty -m "[CI] Update tracked versions: vocalinux=${V} pynput=${P}"
+          git push
+
+##############################################################################
+# Job 2: Build python-pynput if upstream is ahead of COPR
+#         (must run before vocalinux, which BuildRequires python3dist(pynput))
+##############################################################################
+  BuildPynput:
+    needs: GetLatestVersions
+    runs-on: ubuntu-latest
+    container: fedora:latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ github.repository }}
+
+      - name: Install dependencies
+        run: dnf install -y -q copr-cli python3 git rpm-build rpmdevtools
+
+      - name: Configure copr-cli
+        run: |
+          mkdir -p "$HOME/.config"
+          cat > "$HOME/.config/copr" << EOF
+          [copr-cli]
+          login    = ${{ secrets.COPR_BUILD_L }}
+          username = ${{ env.COPR_USERNAME }}
+          token    = ${{ secrets.COPR_BUILD_T }}
+          copr_url = ${{ env.COPR_URL }}
+          EOF
+
+      - name: Compare upstream version with COPR
+        id: check_pynput
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          UPSTREAM="${{ needs.GetLatestVersions.outputs.PYNPUT_VERSION }}"
+
+          if [ "${{ github.event.inputs.force_rebuild }}" = "true" ]; then
+            echo "Force rebuild requested — skipping version check"
+            echo "START_BUILD=true" >> "$GITHUB_ENV"
+            echo "PYNPUT_BUILD_VERSION=$UPSTREAM" >> "$GITHUB_ENV"
+            exit 0
+          fi
+
+          COPR_VERSION=$(copr-cli get-package \
+            "${{ env.COPR_USERNAME }}/${{ env.COPR_PROJECT }}" \
+            --name python-pynput \
+            | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["latest_build"]["source_package"]["version"])' \
+            2>/dev/null || echo "")
+
+          echo "Upstream : $UPSTREAM"
+          echo "COPR     : ${COPR_VERSION:-<none>}"
+
+          norm() { echo "$1" | awk -F. '{printf "%05d%05d%05d\n", $1, $2, $3}'; }
+
+          if [ -z "$COPR_VERSION" ] || [ "$(norm "$UPSTREAM")" -gt "$(norm "${COPR_VERSION%-*}")" ]; then
+            echo "START_BUILD=true" >> "$GITHUB_ENV"
+            echo "PYNPUT_BUILD_VERSION=$UPSTREAM" >> "$GITHUB_ENV"
+            echo "→ COPR build needed"
+          else
+            echo "START_BUILD=false" >> "$GITHUB_ENV"
+            echo "→ COPR already up to date, skipping"
+          fi
+
+      - name: Patch version into spec file
+        if: env.START_BUILD == 'true'
+        run: |
+          sed -i "s/^Version:.*/Version:        ${{ env.PYNPUT_BUILD_VERSION }}/" \
+            "$GITHUB_WORKSPACE/${{ env.PYNPUT_SPEC }}"
+
+      - name: Trigger COPR build for python-pynput
+        if: env.START_BUILD == 'true'
+        run: |
+          set -euo pipefail
+          echo "Downloading source..."
+          spectool -g -C "$GITHUB_WORKSPACE/sources/" "$GITHUB_WORKSPACE/${{ env.PYNPUT_SPEC }}"
+
+          echo "Building sRPM..."
+          rpmbuild -bs \
+            --define "_sourcedir $GITHUB_WORKSPACE/sources" \
+            --define "_specdir $GITHUB_WORKSPACE/specs" \
+            --define "_srcrpmdir $GITHUB_WORKSPACE" \
+            "$GITHUB_WORKSPACE/${{ env.PYNPUT_SPEC }}"
+
+          echo "Starting COPR build for python-pynput ${{ env.PYNPUT_BUILD_VERSION }}"
+          copr-cli build "${{ env.COPR_PROJECT }}" "$GITHUB_WORKSPACE"/*.src.rpm
+
+##############################################################################
+# Job 3: Build vocalinux (and its subpackages) if upstream is ahead of COPR
+##############################################################################
+  BuildVocalinux:
+    needs: [GetLatestVersions, BuildPynput]
+    runs-on: ubuntu-latest
+    container: fedora:latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ github.repository }}
+
+      - name: Install dependencies
+        run: dnf install -y -q copr-cli python3 git rpm-build rpmdevtools
+
+      - name: Configure copr-cli
+        run: |
+          mkdir -p "$HOME/.config"
+          cat > "$HOME/.config/copr" << EOF
+          [copr-cli]
+          login    = ${{ secrets.COPR_BUILD_L }}
+          username = ${{ env.COPR_USERNAME }}
+          token    = ${{ secrets.COPR_BUILD_T }}
+          copr_url = ${{ env.COPR_URL }}
+          EOF
+
+      - name: Compare upstream version with COPR
+        id: check_vocalinux
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          UPSTREAM="${{ needs.GetLatestVersions.outputs.VOCALINUX_VERSION }}"
+
+          if [ "${{ github.event.inputs.force_rebuild }}" = "true" ]; then
+            echo "Force rebuild requested — skipping version check"
+            echo "START_BUILD=true" >> "$GITHUB_ENV"
+            echo "VOCALINUX_BUILD_VERSION=$UPSTREAM" >> "$GITHUB_ENV"
+            echo "VOCALINUX_BUILD_TAG=${{ needs.GetLatestVersions.outputs.VOCALINUX_TAG }}" >> "$GITHUB_ENV"
+            exit 0
+          fi
+
+          COPR_VERSION=$(copr-cli get-package \
+            "${{ env.COPR_USERNAME }}/${{ env.COPR_PROJECT }}" \
+            --name vocalinux \
+            | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["latest_build"]["source_package"]["version"])' \
+            2>/dev/null || echo "")
+
+          echo "Upstream : $UPSTREAM"
+          echo "COPR     : ${COPR_VERSION:-<none>}"
+
+          if [ -z "$COPR_VERSION" ]; then
+            NEEDS_BUILD=yes
+          else
+            # rpm-aware comparison (handles '~' pre-release markers)
+            rpmdev-vercmp "$UPSTREAM" "${COPR_VERSION%-*}" >/dev/null 2>&1
+            case $? in
+              0)  NEEDS_BUILD=no ;;   # equal
+              11) NEEDS_BUILD=yes ;;  # upstream newer
+              12) NEEDS_BUILD=no ;;   # COPR newer
+              *)  NEEDS_BUILD=yes ;;  # vercmp failed -> build to be safe
+            esac
+          fi
+
+          if [ "$NEEDS_BUILD" = "yes" ]; then
+            echo "START_BUILD=true" >> "$GITHUB_ENV"
+            echo "VOCALINUX_BUILD_VERSION=$UPSTREAM" >> "$GITHUB_ENV"
+            echo "VOCALINUX_BUILD_TAG=${{ needs.GetLatestVersions.outputs.VOCALINUX_TAG }}" >> "$GITHUB_ENV"
+            echo "→ COPR build needed"
+          else
+            echo "START_BUILD=false" >> "$GITHUB_ENV"
+            echo "→ COPR already up to date, skipping"
+          fi
+
+      - name: Patch version into spec file
+        if: env.START_BUILD == 'true'
+        run: |
+          set -euo pipefail
+          TAG="${{ env.VOCALINUX_BUILD_TAG }}"
+          sed -i \
+            -e "s/^%global upstream_tag .*/%global upstream_tag ${TAG}/" \
+            -e "s/^%global tag_version .*/%global tag_version ${TAG#v}/" \
+            -e "s/^Version:.*/Version:        ${{ env.VOCALINUX_BUILD_VERSION }}/" \
+            "$GITHUB_WORKSPACE/${{ env.VOCALINUX_SPEC }}"
+
+      - name: Trigger COPR build for vocalinux
+        if: env.START_BUILD == 'true'
+        run: |
+          set -euo pipefail
+          echo "Staging local sources (SELinux policy + rpmlintrc)..."
+          cp "$GITHUB_WORKSPACE"/selinux/vocalinux.te \
+             "$GITHUB_WORKSPACE"/selinux/vocalinux.fc \
+             "$GITHUB_WORKSPACE"/selinux/vocalinux.if \
+             "$GITHUB_WORKSPACE"/specs/vocalinux.rpmlintrc \
+             "$GITHUB_WORKSPACE/sources/"
+
+          echo "Downloading upstream source tarball..."
+          spectool -g -C "$GITHUB_WORKSPACE/sources/" "$GITHUB_WORKSPACE/${{ env.VOCALINUX_SPEC }}"
+
+          echo "Building sRPM..."
+          rpmbuild -bs \
+            --define "_sourcedir $GITHUB_WORKSPACE/sources" \
+            --define "_specdir $GITHUB_WORKSPACE/specs" \
+            --define "_srcrpmdir $GITHUB_WORKSPACE" \
+            "$GITHUB_WORKSPACE/${{ env.VOCALINUX_SPEC }}"
+
+          echo "Starting COPR build for vocalinux ${{ env.VOCALINUX_BUILD_VERSION }}"
+          copr-cli build "${{ env.COPR_PROJECT }}" "$GITHUB_WORKSPACE"/vocalinux-*.src.rpm
