@@ -53,5 +53,5 @@ Report AVC denials (`sudo ausearch -m avc -ts recent`) as issues here.
 
 | Package | Upstream latest |
 |---------|----------------|
-| vocalinux | ![vocalinux](https://img.shields.io/badge/vocalinux-0.16.0-blue) |
+| vocalinux | ![vocalinux](https://img.shields.io/badge/vocalinux-0.16.1-blue) |
 | python-pynput | ![pynput](https://img.shields.io/badge/pynput-1.8.2-blue) |
