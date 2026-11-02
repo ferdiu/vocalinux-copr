@@ -65,7 +65,7 @@ $SUDO dnf install -y -q \
     python3-gobject python3-pywhispercpp python3-tqdm python3-requests \
     desktop-file-utils libappstream-glib \
     python3-pytest python3-pytest-mock python3-pytest-timeout python3-pyyaml \
-    git gtk3
+    git gtk3 gobject-introspection
 
 mkdir -p "$BUILD"/{SOURCES,SPECS,BUILD,RPMS,SRPMS}
 

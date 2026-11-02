@@ -48,8 +48,11 @@ BuildRequires:  python3-pyyaml
 BuildRequires:  git
 # test_settings_dialog.py::TestAboutColorSchemeRead spawns a fresh python
 # subprocess where conftest's gi mock does not apply: it needs the real
-# Gtk 3.0 typelib (conftest mocks gi only in-process)
+# Gtk 3.0 typelib (conftest mocks gi only in-process). Importing Gtk 3.0
+# also requires the xlib 2.0 typelib, which ships in gobject-introspection
+# and is not pulled in by gtk3.
 BuildRequires:  gtk3
+BuildRequires:  gobject-introspection
 
 # Non-Python runtime tools used by text_injection and the tray UI
 Requires:       xdotool
