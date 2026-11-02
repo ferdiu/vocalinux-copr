@@ -259,9 +259,11 @@ jobs:
           if [ -z "$COPR_VERSION" ]; then
             NEEDS_BUILD=yes
           else
-            # rpm-aware comparison (handles '~' pre-release markers)
-            rpmdev-vercmp "$UPSTREAM" "${COPR_VERSION%-*}" >/dev/null 2>&1
-            case $? in
+            # rpm-aware comparison (handles '~' pre-release markers).
+            # rpmdev-vercmp signals the result via exit code (0/11/12), which
+            # set -e would treat as fatal — capture it explicitly instead.
+            RC=0; rpmdev-vercmp "$UPSTREAM" "${COPR_VERSION%-*}" >/dev/null 2>&1 || RC=$?
+            case $RC in
               0)  NEEDS_BUILD=no ;;   # equal
               11) NEEDS_BUILD=yes ;;  # upstream newer
               12) NEEDS_BUILD=no ;;   # COPR newer
