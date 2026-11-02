@@ -64,9 +64,14 @@ text into X11 and Wayland applications.
 %package        engine-whispercpp
 Summary:        Whisper.cpp speech engine for VocaLinux (via pywhispercpp)
 Provides:       vocalinux-engine
-# v0.15.0 upstream requires pywhispercpp>=1.2 (main branch bumped to >=1.5;
-# Fedora 43 ships 1.4.0, Rawhide 1.5.0 — match the packaged release)
+# v0.18.5 upstream requires pywhispercpp>=1.5. Fedora <= 44 ships 1.4.0
+# (code degrades gracefully: no GPU device selection), Fedora >= 45 ships
+# 1.5.0 — match the packaged release per distro version.
+%if 0%{?fedora} >= 45
+Requires:       python3-pywhispercpp >= 1.5
+%else
 Requires:       python3-pywhispercpp >= 1.2
+%endif
 
 %description    engine-whispercpp
 Default speech recognition engine for VocaLinux, using the Fedora-provided
@@ -97,6 +102,14 @@ policy bug can never break dictation; remove the permissive entry with
 # dependency); it is also unpackaged in Fedora and broken on Python 3.13+
 # (needs an audioop shim). Drop it.
 %pyproject_patch_dependency pydub:ignore
+# v0.18.5 declares pywhispercpp>=1.5, but Fedora <= 44 ships 1.4.0 and the
+# code degrades gracefully below 1.5 (GPU device selection disabled with a
+# warning). Relax the constraint there so the dynamic BuildRequires resolve;
+# Fedora >= 45 ships 1.5.0 and keeps the upstream requirement. Drop this
+# override once the oldest targeted Fedora ships pywhispercpp >= 1.5.
+%if 0%{?fedora} < 45
+%pyproject_patch_dependency pywhispercpp>=1.2
+%endif
 %autosetup -p1 -n %{gh_repo}-%{tag_version}
 
 %generate_buildrequires

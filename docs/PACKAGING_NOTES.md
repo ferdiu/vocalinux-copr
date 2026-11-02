@@ -32,8 +32,13 @@
   v0.15.0 but never imported in `src/` (dead dependency). It is also broken
   on Python 3.13+ (requires an `audioop` shim that is not in Fedora) and
   unpackaged. Dropped deliberately.
-- **pywhispercpp >= 1.2** in the engine subpackage matches v0.15.0 upstream
-  metadata (main bumped to >=1.5.0; Fedora 43 ships 1.4.0, Rawhide 1.5.0).
+- **pywhispercpp version is conditional on the Fedora release**: v0.18.5
+  upstream bumped the requirement to >=1.5.0. Fedora <= 44 ships 1.4.0, so
+  there the spec relaxes it (`%pyproject_patch_dependency pywhispercpp>=1.2`
+  and `Requires: python3-pywhispercpp >= 1.2`) — the code degrades
+  gracefully below 1.5 (GPU device selection disabled with a warning).
+  Fedora >= 45 ships 1.5.0 and keeps the upstream `>= 1.5` requirement.
+  Drop the conditional once the oldest targeted Fedora ships >= 1.5.
 - **Dropped `Patch0: whispercpp-context-params-guard.patch`**: it was a
   backport guarding `context_params` usage against pywhispercpp < 1.5.
   Upstream v0.18.5 ships an enhanced version of that fix (signature
