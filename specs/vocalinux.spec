@@ -41,6 +41,9 @@ BuildRequires:  python3-pytest-timeout
 # desktop/appstream validation in the check section
 BuildRequires:  desktop-file-utils
 BuildRequires:  libappstream-glib
+# tests/test_{dependency_exports,distro_package_map,installer_cuda_diagnostics,
+# installer_pinned_dependencies,native_packaging,snap_packaging}.py import yaml
+BuildRequires:  python3-pyyaml
 
 # Non-Python runtime tools used by text_injection and the tray UI
 Requires:       xdotool
