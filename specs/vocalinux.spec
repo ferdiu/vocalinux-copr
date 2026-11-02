@@ -44,6 +44,12 @@ BuildRequires:  libappstream-glib
 # tests/test_{dependency_exports,distro_package_map,installer_cuda_diagnostics,
 # installer_pinned_dependencies,native_packaging,snap_packaging}.py import yaml
 BuildRequires:  python3-pyyaml
+# tests/test_reproducible_wheel.py shells out to `git init`
+BuildRequires:  git
+# test_settings_dialog.py::TestAboutColorSchemeRead spawns a fresh python
+# subprocess where conftest's gi mock does not apply: it needs the real
+# Gtk 3.0 typelib (conftest mocks gi only in-process)
+BuildRequires:  gtk3
 
 # Non-Python runtime tools used by text_injection and the tray UI
 Requires:       xdotool
