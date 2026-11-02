@@ -143,10 +143,13 @@ jobs:
             exit 0
           fi
 
+          # latest_succeeded_build (not latest_build): a FAILED build of the
+          # same version must not suppress a rebuild. When nothing has ever
+          # succeeded the field is null -> python raises -> || echo "".
           COPR_VERSION=$(copr-cli get-package \
             "${{ env.COPR_USERNAME }}/${{ env.COPR_PROJECT }}" \
             --name python-pynput \
-            | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["latest_build"]["source_package"]["version"])' \
+            | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["latest_succeeded_build"]["source_package"]["version"])' \
             2>/dev/null || echo "")
 
           echo "Upstream : $UPSTREAM"
@@ -241,10 +244,13 @@ jobs:
             exit 0
           fi
 
+          # latest_succeeded_build (not latest_build): a FAILED build of the
+          # same version must not suppress a rebuild. When nothing has ever
+          # succeeded the field is null -> python raises -> || echo "".
           COPR_VERSION=$(copr-cli get-package \
             "${{ env.COPR_USERNAME }}/${{ env.COPR_PROJECT }}" \
             --name vocalinux \
-            | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["latest_build"]["source_package"]["version"])' \
+            | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["latest_succeeded_build"]["source_package"]["version"])' \
             2>/dev/null || echo "")
 
           echo "Upstream : $UPSTREAM"
