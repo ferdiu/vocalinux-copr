@@ -108,7 +108,7 @@ policy bug can never break dictation; remove the permissive entry with
 # Fedora >= 45 ships 1.5.0 and keeps the upstream requirement. Drop this
 # override once the oldest targeted Fedora ships pywhispercpp >= 1.5.
 %if 0%{?fedora} < 45
-%pyproject_patch_dependency pywhispercpp>=1.2
+%pyproject_patch_dependency pywhispercpp:set_lower:1.2
 %endif
 %autosetup -p1 -n %{gh_repo}-%{tag_version}
 
@@ -147,6 +147,15 @@ install -Dm0644 selinux-build/vocalinux.pp.bz2 \
 install -Dm0644 %{SOURCE3} \
     %{buildroot}%{_datadir}/selinux/devel/include/distributed/%{modulename}.if
 
+# TestWhispercppGgmlDeviceSelection (v0.18.5): mocks pywhispercpp but the
+# code probes the real one for context_params support. On Fedora < 45 the
+# buildroot has pywhispercpp 1.4.0 (no context_params), so the code takes
+# the fallback path and the context_params assertions fail. Fedora >= 45
+# ships 1.5.0 and the tests pass, so only deselect on older releases.
+%if 0%{?fedora} < 45
+%global pywhispercpp_ggml_deselect --deselect tests/test_recognition_manager_device_config.py::TestWhispercppGgmlDeviceSelection
+%endif
+
 %check
 desktop-file-validate %{buildroot}%{_datadir}/applications/com.vocalinux.Vocalinux.desktop
 appstream-util validate-relax --nonet %{buildroot}%{_datadir}/metainfo/com.vocalinux.Vocalinux.metainfo.xml
@@ -158,10 +167,21 @@ appstream-util validate-relax --nonet %{buildroot}%{_datadir}/metainfo/com.vocal
 #    the real pywhispercpp for context_params support; pywhispercpp is not
 #    installed in the buildroot, so the fallback path is taken and the
 #    assertions on GPU device selection fail
+#  - TestTextInjectorWithIBus / TestTextInjectorWithIbusActiveInputMethod /
+#    TestIBusRuntimeFallback / TestBackgroundIBusInitialization: need a
+#    running IBus daemon / session bus (none in mock)
+#  - TestPortalBackendSelection: needs a running xdg-desktop-portal; without
+#    it the code falls back to ydotool and the portal assertions fail
 %pytest -m "not slow and not integration and not audio" \
     -k "not test_ibus_engine_core" \
     --deselect tests/test_autostart_manager_ext.py::TestAutostartManagerExtra::test_enable_autostart_permission_error \
-    --deselect tests/test_recognition_manager_device_config.py::TestWhispercppGpuDeviceSelection
+    --deselect tests/test_recognition_manager_device_config.py::TestWhispercppGpuDeviceSelection \
+    --deselect tests/test_ibus_engine.py::TestTextInjectorWithIBus \
+    --deselect tests/test_ibus_engine.py::TestTextInjectorWithIbusActiveInputMethod \
+    --deselect tests/test_text_injector.py::TestIBusRuntimeFallback \
+    --deselect tests/test_text_injector_ext.py::TestBackgroundIBusInitialization \
+    --deselect tests/test_remote_desktop_portal.py::TestPortalBackendSelection \
+    %{?pywhispercpp_ggml_deselect}
 
 %files -f %{pyproject_files}
 %doc README.md
@@ -196,6 +216,13 @@ fi
 %ghost %attr(0644,root,root) %verify(not md5 size mode mtime) %{_sharedstatedir}/selinux/%{selinuxtype}/active/modules/200/%{modulename}
 
 %changelog
+* Mon Nov 02 2026 ferdiu <ferdiu@users.noreply.github.com> - 0.18.5-1
+- Drop whispercpp-context-params-guard patch: v0.18.5 ships the fix upstream
+- Relax pywhispercpp to >=1.2 on Fedora < 45 (ships 1.4.0; code degrades
+  gracefully below 1.5); Fedora >= 45 keeps upstream >=1.5
+- Deselect environment-dependent tests (IBus daemon, xdg-desktop-portal,
+  GGML context_params on pywhispercpp < 1.5) in %check
+
 * Thu Aug 20 2026 ferdiu <ferdiu@users.noreply.github.com> - 0.15.0-1
 - Package VocaLinux 0.15.0 for Fedora COPR (engine: whisper.cpp via
   python3-pywhispercpp); optional permissive vocalinux_t SELinux domain

@@ -34,7 +34,7 @@
   unpackaged. Dropped deliberately.
 - **pywhispercpp version is conditional on the Fedora release**: v0.18.5
   upstream bumped the requirement to >=1.5.0. Fedora <= 44 ships 1.4.0, so
-  there the spec relaxes it (`%pyproject_patch_dependency pywhispercpp>=1.2`
+  there the spec relaxes it (`%pyproject_patch_dependency pywhispercpp:set_lower:1.2`
   and `Requires: python3-pywhispercpp >= 1.2`) — the code degrades
   gracefully below 1.5 (GPU device selection disabled with a warning).
   Fedora >= 45 ships 1.5.0 and keeps the upstream `>= 1.5` requirement.
@@ -44,11 +44,21 @@
   Upstream v0.18.5 ships an enhanced version of that fix (signature
   inspection plus a distribution-version check), so the patch no longer
   applies and was removed when packaging 0.18.5.
-- **%check deselections**: `test_ibus_engine_core` (needs a running IBus
-  daemon) and
-  `test_autostart_manager_ext.py::...::test_enable_autostart_permission_error`
-  (chmod-based assertions don't apply when building as root). Re-check on
-  each version bump whether these still fail in mock.
+- **%check deselections** (all environment-specific, not product defects;
+  re-check on each version bump whether they still fail in mock):
+  - `test_ibus_engine_core`, `TestTextInjectorWithIBus`,
+    `TestTextInjectorWithIbusActiveInputMethod`, `TestIBusRuntimeFallback`,
+    `TestBackgroundIBusInitialization`: need a running IBus daemon/session
+    bus (none in mock).
+  - `TestPortalBackendSelection`: needs a running xdg-desktop-portal;
+    without it the code falls back to ydotool and portal assertions fail.
+  - `test_autostart_manager_ext.py::...::test_enable_autostart_permission_error`:
+    chmod-based assertions don't apply when building as root.
+  - `TestWhispercppGpuDeviceSelection`: mocks pywhispercpp but the code
+    probes the real one, which is absent from the buildroot → fallback path.
+  - `TestWhispercppGgmlDeviceSelection` (v0.18.5, **Fedora < 45 only** via
+    `%{?pywhispercpp_ggml_deselect}`): same probing issue; passes once the
+    buildroot has pywhispercpp >= 1.5 (Fedora 45+).
 - **pynput %check** uses xvfb-run instead of `%pyproject_check_import`
   because importing pynput opens an X connection.
 - **libayatana-appindicator-gtk3**: explicit Requires is intentional — the
